@@ -11,6 +11,8 @@ import (
 type Store interface {
 	Create(url string) (string, error)
 	Get(id string) (string, error)
+	IncrementCount(id string) error     // ← 追加
+	GetStats(id string) (*Stats, error) // ← 追加
 }
 
 type URLHandler struct {
@@ -105,4 +107,30 @@ func (h *URLHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, url, http.StatusFound)
+}
+
+// GET /stats/{id}
+func (h *URLHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/stats/")
+	if id == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	stats, err := h.store.GetStats(id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, http.StatusNotFound, "short url not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
 }
